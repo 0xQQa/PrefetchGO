@@ -1,6 +1,7 @@
 package main
 
 import (
+	"crypto/md5"
 	"io/fs"
 	"io/ioutil"
 	"log"
@@ -12,7 +13,6 @@ import (
 )
 
 const prefetchPath = "C:\\Windows\\Prefetch\\"
-const sleepTime = 500
 
 var isWorking bool
 
@@ -40,6 +40,20 @@ func handleCTRL_C() {
 }
 
 /*
+ * Funkcja obliczajaca hash md5 na potrzeby detekcji plików pf w ich liscie
+ */
+
+func getInfoPFFileHash(path string) string {
+	f, err := os.Open(path)
+	if err != nil {
+		return "ERROR"
+	}
+
+	defer f.Close()
+	return getFileHash(f, md5.New)
+}
+
+/*
  * Funkcja aktualizujaca wewnetrzna liste plików pf o te
  * istniejace w lokalizacji prefetch, pozbywa sie rowniez
  * tych ktore zostaly usuniete
@@ -61,7 +75,7 @@ func checkPFinPathState(files []fs.FileInfo) error {
 			log.Println("Found new PF file: " + file.Name())
 			fullPathPF := prefetchPath + file.Name()
 			fileTimes, _ := getSysTimes(fullPathPF)
-			hash := getFileHash(fullPathPF)
+			hash := getInfoPFFileHash(fullPathPF)
 			newNodePF := nodePF{Name: file.Name(), LwTime: fileTimes.lwTime, Hash: hash}
 			newListPF = append(newListPF, newNodePF)
 			jsonName, err := fillInfoPFtoJSON(fullPathPF)
@@ -89,7 +103,7 @@ func checkChangeInFilesPF(files []fs.FileInfo) {
 		if fileTimes.lwTime != listPF[index].LwTime {
 			listPF[index].LwTime = fileTimes.lwTime
 			fullPathPF := prefetchPath + file.Name
-			hash := getFileHash(fullPathPF)
+			hash := getInfoPFFileHash(fullPathPF)
 
 			if hash == "ERROR" && file.Hash != "ERROR" {
 				log.Println("Got error while updating hash for: " + file.Name)
@@ -127,7 +141,7 @@ func startDetection() (bool, error) {
 
 		checkPFinPathState(files)
 		checkChangeInFilesPF(files)
-		time.Sleep(sleepTime * time.Millisecond)
+		time.Sleep(config.SleepDelay * time.Millisecond)
 	}
 
 	return true, nil

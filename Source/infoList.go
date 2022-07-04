@@ -46,7 +46,7 @@ func restoreListFromFile() error {
 	tmpDB, err1 := os.OpenFile(PrefetchDB, os.O_RDWR, 0644)
 	if err1 != nil {
 		log.Println("Creating new PF info list")
-		return nil
+		return err1
 	}
 
 	byteValue, err3 := ioutil.ReadAll(tmpDB)

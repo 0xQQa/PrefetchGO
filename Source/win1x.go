@@ -4,6 +4,7 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"fmt"
+	"hash"
 	"io"
 	"os"
 	"strings"
@@ -25,20 +26,43 @@ func getAsDateTime(windowsTicks int64) time.Time {
  *	Wrapper do pozyskania hash'u z zadnaego po sciezce pliku
  */
 
-func getFileHash(path string) string {
-	f, err := os.Open(path)
-	if err != nil {
-		return "ERROR"
-	}
+func getFileHash(f *os.File, choosedHash func() hash.Hash) string {
 
-	defer f.Close()
-	h := choosedHash.Type()
-	_, err = io.Copy(h, f)
+	h := choosedHash()
+	_, err := io.Copy(h, f)
 	if err != nil {
 		return "ERROR"
 	}
 
 	return hex.EncodeToString(h.Sum(nil))
+}
+
+/*
+ * Wrapper obliczajacy zestaw hashy podanych z pliku konfiguracyjnego
+ */
+
+func getSettedFileHash(path string) []CountedHash {
+	countedHashes := make([]CountedHash, config.HashCount)
+
+	f, err := os.Open(path)
+	if err != nil {
+		for index := range config.HashNames {
+			countedHashes[index].Name = config.HashNames[index]
+			countedHashes[index].Value = "ERROR"
+		}
+
+		return countedHashes
+	}
+
+	defer f.Close()
+
+	for index, hashType := range config.HashTypes {
+		countedHashes[index].Name = config.HashNames[index]
+		countedHashes[index].Value = getFileHash(f, hashType)
+	}
+
+	return countedHashes
+
 }
 
 /*
@@ -69,6 +93,20 @@ func resolvePathPF(volumeInfo []VolumeInfoPF, pathPF string) string {
 	}
 
 	return ""
+}
+
+/*
+ *	Funkcja zwracaja litere dysku dla numeru seryjnego
+ */
+
+func getDiskFromSerial(serialNumber string) string {
+	for _, disk := range allDisks {
+		if disk.serial == serialNumber {
+			return disk.letter
+		}
+	}
+
+	return "ERROR"
 }
 
 /*
@@ -107,7 +145,6 @@ func getPFInfo(rawData []byte, infoPF *InfoPF) {
 		lastRunTimes = append(lastRunTimes, datetimeData)
 	}
 
-	infoPF.UsedHash = choosedHash.Name
 	infoPF.VolumeInfoAmount = volumeCount
 	infoPF.RunInfo.Times = runCount
 	infoPF.RunInfo.RunList = lastRunTimes
@@ -145,7 +182,7 @@ func getPFInfo(rawData []byte, infoPF *InfoPF) {
 			}
 		}
 
-		volumeInfoPF := VolumeInfoPF{Name: devName, Created: getAsDateTime(int64(ct)), Serial: sn, Directories: dirStringsList, DirectoriesAmount: uint32(numDirectoryStrings)}
+		volumeInfoPF := VolumeInfoPF{Name: devName, Created: getAsDateTime(int64(ct)), Serial: sn, Directories: dirStringsList, DirectoriesAmount: uint32(numDirectoryStrings), Letter: getDiskFromSerial(sn)}
 		infoPF.VolumeInfo = append(infoPF.VolumeInfo, volumeInfoPF)
 	}
 
@@ -154,7 +191,7 @@ func getPFInfo(rawData []byte, infoPF *InfoPF) {
 	for index := 0; index < int(filenameStringsSize); index += 2 {
 		if filenameStringsBytes[index] == 0 {
 			realPatfhPf := resolvePathPF(infoPF.VolumeInfo, tmpString.String())
-			filenames = append(filenames, FilesPF{Name: tmpString.String(), Hash: getFileHash(realPatfhPf)})
+			filenames = append(filenames, FilesPF{Name: tmpString.String(), Hash: getSettedFileHash(realPatfhPf)})
 			tmpString.Reset()
 		} else {
 			tmpString.WriteByte(filenameStringsBytes[index])

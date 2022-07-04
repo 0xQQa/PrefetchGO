@@ -5,15 +5,11 @@ import (
 	"bufio"
 	"bytes"
 	"crypto/md5"
-	"crypto/sha1"
-	"crypto/sha256"
 	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
-	"hash"
 	"io/ioutil"
-	"log"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -23,13 +19,6 @@ import (
 )
 
 const Win10OrWin11 = 30
-
-type Hashing struct {
-	Type func() hash.Hash
-	Name string
-}
-
-var choosedHash Hashing
 
 type SysTimesPF struct {
 	crTime int64
@@ -60,17 +49,22 @@ type VolumeInfoPF struct {
 	Name              string
 	Serial            string
 	Created           time.Time
+	Letter            string
 	DirectoriesAmount uint32
 	Directories       []string
 }
 
+type CountedHash struct {
+	Name  string
+	Value string
+}
+
 type FilesPF struct {
 	Name string
-	Hash string
+	Hash []CountedHash
 }
 
 type InfoPF struct {
-	UsedHash         string
 	Times            SysTimesAsTimePF
 	FileInfo         FileInfoPF
 	RunInfo          RunInfoPF
@@ -156,7 +150,7 @@ func prepareBytesPF(rawData []byte) ([]byte, error) {
  */
 
 func getHashAndSize(rawData []byte) (int, string) {
-	hashRawData := choosedHash.Type()
+	hashRawData := md5.New()
 	_, err := hashRawData.Write(rawData)
 	if err != nil {
 		return 0, "ERROR"
@@ -259,39 +253,13 @@ func fillInfoPFtoJSON(path string) (string, error) {
 }
 
 /*
- * Funkcja ustalajaca typ wykrozystywanego hash'a
- */
-
-func setHashType(wchich string) {
-	choosedHash.Name = wchich
-
-	switch wchich {
-	case "sha256":
-		choosedHash.Type = sha256.New
-	case "sha1":
-		choosedHash.Type = sha1.New
-	case "md5":
-		choosedHash.Type = md5.New
-	default:
-		panic("Unknow hash type choosen! [md5/sha1/sha256]")
-	}
-}
-
-/*
  * Funkcja wejscia do programu
  */
 
 func main() {
 	canRunOnThisHost()
-
-	args := os.Args
-	if len(args) != 2 {
-		log.Println("Usage: " + args[0] + " [sha256/sha1/md5]")
-		os.Exit(1)
-	}
-
+	parseConfig()
 	getAllDisksHexSerials()
-	setHashType(args[1])
 	handleCTRL_C()
 	restoreListFromFile()
 	startDetection()

@@ -1,1 +1,1 @@
-go build -o ..\Build\PrefetchGO.exe .\prefetch.go .\decompresion.go .\prefetchControl.go .\infoList.go .\win1x.go .\diskDetect.go 
+go build -o ..\Build\PrefetchGO.exe .\prefetch.go .\decompresion.go .\prefetchControl.go .\infoList.go .\win1x.go .\diskDetect.go .\configParser.go 
